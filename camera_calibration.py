@@ -38,9 +38,12 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
+import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterator
 
 import cv2
@@ -85,6 +88,177 @@ class Calibration:
     views: list[View]             # views used for this run
     errors: list[float]           # per-view RMS reprojection error (px)
 
+# ─────────────────────────────────────────────────────────── report helpers ──
+
+def _to_list(value):
+    """Convert numpy/OpenCV values into JSON-safe Python values."""
+    if value is None:
+        return None
+
+    if hasattr(value, "tolist"):
+        return value.tolist()
+
+    if isinstance(value, (list, tuple)):
+        return [_to_list(v) for v in value]
+
+    if isinstance(value, (np.floating, np.integer)):
+        return value.item()
+
+    return value
+
+
+def make_report_data(cal, args, image_size, overall_rms=None):
+    """
+    Build JSON data consumed by calibration_report.py.
+
+    Expected calibration object fields:
+      cal.K
+      cal.dist
+      cal.rvecs
+      cal.tvecs
+      cal.views
+      cal.errors
+
+    Each view is expected to contain:
+      view.filename or view.path
+      view.obj_pts
+      view.img_pts
+    """
+
+    width, height = image_size
+
+    views = []
+
+    project_fn = (
+        cv2.fisheye.projectPoints
+        if args.distortion_model == "equidistant"
+        else cv2.projectPoints
+    )
+
+    for index, (view, rvec, tvec, rms_error) in enumerate(
+        zip(cal.views, cal.rvecs, cal.tvecs, cal.errors)
+    ):
+        try:
+            projected, _ = project_fn(
+                view.obj_pts,
+                rvec,
+                tvec,
+                cal.K,
+                cal.dist,
+            )
+
+            projected = projected.reshape(-1, 2)
+            observed = view.img_pts.reshape(-1, 2)
+            residuals = observed - projected
+
+        except Exception as exc:
+            print(f"Warning: could not calculate report residuals for view {index}: {exc}")
+            observed = None
+            projected = None
+            residuals = None
+
+        filename = getattr(view, "filename", None)
+        if filename is None:
+            filename = getattr(view, "path", None)
+        if filename is None:
+            filename = f"image_{index:04d}"
+
+        views.append({
+            "index": index,
+            "filename": str(filename),
+            "object_points": _to_list(view.obj_pts),
+            "image_points": _to_list(observed),
+            "projected_points": _to_list(projected),
+            "residual_vectors": _to_list(residuals),
+            "rvec": _to_list(rvec),
+            "tvec": _to_list(tvec),
+            "rms_error_px": float(rms_error),
+            "detected_point_count": (
+                int(len(view.img_pts)) if hasattr(view, "img_pts") else None
+            ),
+        })
+
+    board_info = {
+        "board_type": getattr(args, "board_type", None),
+        "board_cols": getattr(args, "board_cols", None),
+        "board_rows": getattr(args, "board_rows", None),
+        "square_size_m": getattr(args, "square_size", None),
+        "marker_size_m": getattr(args, "marker_size", None),
+    }
+
+    return {
+        "schema_version": 1,
+        "camera_name": getattr(args, "camera_name", None),
+        "image_width": int(width),
+        "image_height": int(height),
+        "distortion_model": getattr(args, "distortion_model", None),
+        "camera_matrix": _to_list(cal.K),
+        "distortion_coefficients": _to_list(cal.dist),
+        "overall_rms_error_px": (
+            float(overall_rms) if overall_rms is not None else None
+        ),
+        "board": board_info,
+        "views": views,
+        "calibration_command": " ".join(sys.argv),
+        "opencv_version": cv2.__version__,
+    }
+
+
+def write_report_data(cal, args, image_size, yaml_output_path, overall_rms=None):
+    """Write diagnostic JSON beside the camera YAML file."""
+    yaml_path = Path(yaml_output_path)
+    json_path = yaml_path.with_suffix(".report_data.json")
+
+    report_data = make_report_data(
+        cal=cal,
+        args=args,
+        image_size=image_size,
+        overall_rms=overall_rms,
+    )
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(report_data, f, indent=2)
+
+    return json_path
+
+
+def run_pdf_report(args, yaml_output_path, report_data_path):
+    """Run the separate PDF report generator."""
+    yaml_path = Path(yaml_output_path)
+
+    report_output = (
+        Path(args.report_output)
+        if args.report_output
+        else yaml_path.with_name(f"{yaml_path.stem}_report.pdf")
+    )
+
+    coordinate_image = Path("coordinate_convention.jpg")
+
+    command = [
+        sys.executable,
+        args.report_script,
+        "--report-data", str(report_data_path),
+        "--camera-yaml", str(yaml_output_path),
+        "--output", str(report_output),
+    ]
+
+    if coordinate_image.exists():
+        command.extend([
+            "--coordinate-convention-image",
+            str(coordinate_image),
+        ])
+    else:
+        print(
+            "Warning: coordinate_convention.jpg was not found. "
+            "The report will mark the coordinate convention image as Unknown."
+        )
+
+    print("\nGenerating calibration PDF report...")
+    print(" ".join(command))
+
+    subprocess.run(command, check=True)
+
+    print(f"PDF report written to: {report_output}")
 
 # ──────────────────────────────────────────────────────── argument parsing ──
 
@@ -142,6 +316,14 @@ def parse_args() -> argparse.Namespace:
                         "(default 5)")
     p.add_argument("--show_corners", action="store_true",
                    help="Display the detected corners for each image")
+    
+    # Report flags
+    p.add_argument("--create_report", action="store_true",
+                    help="Generate a PDF camera calibration report after calibration")
+    p.add_argument("--report_output", default=None,
+                    help="Optional output PDF path. Default: <output_yaml_stem>_report.pdf")
+    p.add_argument("--report_script", default="calibration_report.py",
+                    help="Path to the PDF report generator script")
     return p.parse_args()
 
 
@@ -560,6 +742,22 @@ def main() -> None:
     print(f"\ncamera_info YAML written to: {args.output}")
     print("Point your camera driver's camera_info_url parameter at it, e.g. "
           f"file://{os.path.abspath(args.output)}")
+
+    if args.create_report:
+        width, height = image_size
+        report_data_path = write_report_data(
+            cal=cal,
+            args=args,
+            image_size=(width, height),
+            yaml_output_path=args.output,
+            overall_rms=cal.rms,
+        )
+
+        run_pdf_report(
+            args=args,
+            yaml_output_path=args.output,
+            report_data_path=report_data_path,
+        )
 
 
 if __name__ == "__main__":
