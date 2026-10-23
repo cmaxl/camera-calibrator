@@ -125,12 +125,12 @@ def add_title_page(pdf, data, metadata):
         ("Lens identifier", metadata["lens_identifier"]),
         ("Lens focus setting", metadata["focus_setting"]),
         ("Lens aperture", metadata["aperture_setting"]),
-        ("Image resolution", f'{data["image_width"]} x {data["image_height"]} px'),
+        ("Image resolution", f"{data['image_width']} x {data['image_height']} px"),
         ("Distortion model", data.get("distortion_model", UNKNOWN)),
         ("Board type", data.get("board", {}).get("board_type", UNKNOWN)),
         ("OpenCV version", data.get("opencv_version", UNKNOWN)),
         ("Input images used", len(data.get("views", []))),
-        ("Overall RMS error", f'{safe_value(data.get("overall_rms_error_px"))} px'),
+        ("Overall RMS error", f"{safe_value(data.get('overall_rms_error_px'))} px"),
     ]
 
     y = 0.85
@@ -229,10 +229,7 @@ def sensor_coverage(image_points, width, height):
     x = image_points[:, 0]
     y = image_points[:, 1]
 
-    valid = (
-        (x >= 0) & (x < width) &
-        (y >= 0) & (y < height)
-    )
+    valid = (x >= 0) & (x < width) & (y >= 0) & (y < height)
 
     x = x[valid]
     y = y[valid]
@@ -263,66 +260,82 @@ def evaluate_quality(data, residual_magnitudes, coverage_fraction, distances, ti
         checks.append(("Overall RMS reprojection error", UNKNOWN, "Unknown"))
     else:
         status = "PASS" if global_rms <= MAX_GLOBAL_RMS_ERROR_PX else "FAIL"
-        checks.append((
-            "Overall RMS reprojection error",
-            f"{global_rms:.3f} px (limit {MAX_GLOBAL_RMS_ERROR_PX:.3f} px)",
-            status,
-        ))
+        checks.append(
+            (
+                "Overall RMS reprojection error",
+                f"{global_rms:.3f} px (limit {MAX_GLOBAL_RMS_ERROR_PX:.3f} px)",
+                status,
+            )
+        )
 
     valid_views = data.get("views", [])
     image_count = len(valid_views)
     status = "PASS" if image_count >= MIN_VALID_IMAGES else "WARNING"
-    checks.append((
-        "Number of valid calibration images",
-        f"{image_count} (recommended >= {MIN_VALID_IMAGES})",
-        status,
-    ))
+    checks.append(
+        (
+            "Number of valid calibration images",
+            f"{image_count} (recommended >= {MIN_VALID_IMAGES})",
+            status,
+        )
+    )
 
     if residual_magnitudes.size:
         p95 = float(np.percentile(residual_magnitudes, 95))
         p99 = float(np.percentile(residual_magnitudes, 99))
 
-        checks.append((
-            "95th percentile residual",
-            f"{p95:.3f} px (limit {MAX_P95_REPROJECTION_ERROR_PX:.3f} px)",
-            "PASS" if p95 <= MAX_P95_REPROJECTION_ERROR_PX else "WARNING",
-        ))
-        checks.append((
-            "99th percentile residual",
-            f"{p99:.3f} px (limit {MAX_P99_REPROJECTION_ERROR_PX:.3f} px)",
-            "PASS" if p99 <= MAX_P99_REPROJECTION_ERROR_PX else "WARNING",
-        ))
+        checks.append(
+            (
+                "95th percentile residual",
+                f"{p95:.3f} px (limit {MAX_P95_REPROJECTION_ERROR_PX:.3f} px)",
+                "PASS" if p95 <= MAX_P95_REPROJECTION_ERROR_PX else "WARNING",
+            )
+        )
+        checks.append(
+            (
+                "99th percentile residual",
+                f"{p99:.3f} px (limit {MAX_P99_REPROJECTION_ERROR_PX:.3f} px)",
+                "PASS" if p99 <= MAX_P99_REPROJECTION_ERROR_PX else "WARNING",
+            )
+        )
     else:
         checks.append(("Residual percentile statistics", UNKNOWN, "Unknown"))
 
     coverage_status = (
-        "PASS"
-        if coverage_fraction >= MIN_SENSOR_GRID_COVERAGE_FRACTION
-        else "WARNING"
+        "PASS" if coverage_fraction >= MIN_SENSOR_GRID_COVERAGE_FRACTION else "WARNING"
     )
-    checks.append((
-        "Sensor grid coverage",
-        (f"{coverage_fraction * 100:.1f}% "
-        f"(recommended >= {MIN_SENSOR_GRID_COVERAGE_FRACTION * 100:.1f}%)"),
-        coverage_status,
-    ))
+    checks.append(
+        (
+            "Sensor grid coverage",
+            (
+                f"{coverage_fraction * 100:.1f}% "
+                f"(recommended >= {MIN_SENSOR_GRID_COVERAGE_FRACTION * 100:.1f}%)"
+            ),
+            coverage_status,
+        )
+    )
 
     if tilts:
         maximum_tilt = max(tilts)
-        checks.append((
-            "Maximum board tilt",
-            (f"{maximum_tilt:.1f} deg "
-            f"(recommended >= {MIN_MAX_BOARD_TILT_DEG:.1f} deg)"),
-            "PASS" if maximum_tilt >= MIN_MAX_BOARD_TILT_DEG else "WARNING",
-        ))
+        checks.append(
+            (
+                "Maximum board tilt",
+                (
+                    f"{maximum_tilt:.1f} deg "
+                    f"(recommended >= {MIN_MAX_BOARD_TILT_DEG:.1f} deg)"
+                ),
+                "PASS" if maximum_tilt >= MIN_MAX_BOARD_TILT_DEG else "WARNING",
+            )
+        )
 
     if len(distances) >= 2 and min(distances) > 0:
         ratio = max(distances) / min(distances)
-        checks.append((
-            "Calibration distance range ratio",
-            f"{ratio:.2f}x (recommended >= {MIN_DISTANCE_RATIO:.2f}x)",
-            "PASS" if ratio >= MIN_DISTANCE_RATIO else "WARNING",
-        ))
+        checks.append(
+            (
+                "Calibration distance range ratio",
+                f"{ratio:.2f}x (recommended >= {MIN_DISTANCE_RATIO:.2f}x)",
+                "PASS" if ratio >= MIN_DISTANCE_RATIO else "WARNING",
+            )
+        )
 
     return checks
 
@@ -330,6 +343,7 @@ def evaluate_quality(data, residual_magnitudes, coverage_fraction, distances, ti
 # ============================================================================
 # REPORT PAGES
 # ============================================================================
+
 
 def add_intrinsics_page(pdf, data, metadata):
     width = data["image_width"]
@@ -366,10 +380,14 @@ def add_intrinsics_page(pdf, data, metadata):
         focal_mm = fx * effective_sensor_width_mm / width
 
     dist = as_array(data.get("distortion_coefficients"))
-    dist_text = UNKNOWN if dist is None else np.array2string(
-        dist.reshape(-1),
-        precision=8,
-        separator=", ",
+    dist_text = (
+        UNKNOWN
+        if dist is None
+        else np.array2string(
+            dist.reshape(-1),
+            precision=8,
+            separator=", ",
+        )
     )
 
     rows = [
@@ -379,8 +397,14 @@ def add_intrinsics_page(pdf, data, metadata):
         ("fy", safe_value(fy)),
         ("cx", safe_value(cx)),
         ("cy", safe_value(cy)),
-        ("Principal-point X offset from center", f"{safe_value(principal_offset_x, 2)} %"),
-        ("Principal-point Y offset from center", f"{safe_value(principal_offset_y, 2)} %"),
+        (
+            "Principal-point X offset from center",
+            f"{safe_value(principal_offset_x, 2)} %",
+        ),
+        (
+            "Principal-point Y offset from center",
+            f"{safe_value(principal_offset_y, 2)} %",
+        ),
         ("Horizontal field of view", f"{safe_value(hfov, 2)} deg"),
         ("Vertical field of view", f"{safe_value(vfov, 2)} deg"),
         ("Diagonal field of view", f"{safe_value(dfov, 2)} deg"),
@@ -673,20 +697,16 @@ def add_error_pages(pdf, data):
             quiver = axes[2].quiver(
                 vector_points[:, 0],
                 vector_points[:, 1],
-
                 # Increase arrow display size without changing the underlying
                 # residual magnitude represented by color.
                 vector_components[:, 0] * RESIDUAL_VECTOR_VISUAL_SCALE,
                 vector_components[:, 1] * RESIDUAL_VECTOR_VISUAL_SCALE,
-
                 vector_magnitudes,
                 cmap="plasma",
-
                 # Important: values are interpreted in image pixel coordinates.
                 angles="xy",
                 scale_units="xy",
                 scale=1.0,
-
                 width=0.0035,
                 headwidth=4.5,
                 headlength=5.5,
@@ -766,9 +786,7 @@ def add_coverage_page(pdf, data, points):
     axes[0].grid(alpha=0.25)
 
     im = axes[1].imshow(occupancy, cmap="viridis", origin="upper")
-    axes[1].set_title(
-        f"Grid Occupancy: {coverage_fraction * 100:.1f}% Covered"
-    )
+    axes[1].set_title(f"Grid Occupancy: {coverage_fraction * 100:.1f}% Covered")
     axes[1].set_xlabel("Grid x")
     axes[1].set_ylabel("Grid y")
     fig.colorbar(im, ax=axes[1], label="Detected points")
@@ -824,7 +842,9 @@ def add_pose_page(pdf, data):
 
     ax_distance = fig.add_subplot(222)
     if distances:
-        ax_distance.hist(distances, bins=min(15, max(5, len(distances))), color="tab:blue")
+        ax_distance.hist(
+            distances, bins=min(15, max(5, len(distances))), color="tab:blue"
+        )
     ax_distance.set_title("Camera-to-Target Distance")
     ax_distance.set_xlabel("Distance [board units]")
     ax_distance.set_ylabel("Image count")
@@ -840,10 +860,7 @@ def add_pose_page(pdf, data):
 
     ax_error = fig.add_subplot(224)
     if distances and errors:
-        usable = [
-            (d, e) for d, e in zip(distances, errors)
-            if e is not None
-        ]
+        usable = [(d, e) for d, e in zip(distances, errors) if e is not None]
         if usable:
             x, y = zip(*usable)
             ax_error.scatter(x, y, color="tab:red")
@@ -869,20 +886,20 @@ def add_per_image_page(pdf, data):
 
         rms = view.get("rms_error_px")
         status = (
-            "WARNING"
-            if rms is not None and rms > MAX_PER_IMAGE_RMS_ERROR_PX
-            else "OK"
+            "WARNING" if rms is not None and rms > MAX_PER_IMAGE_RMS_ERROR_PX else "OK"
         )
 
-        rows.append([
-            view.get("index", UNKNOWN),
-            Path(str(view.get("filename", UNKNOWN))).name,
-            view.get("detected_point_count", UNKNOWN),
-            safe_value(rms, 3),
-            safe_value(distance, 4),
-            safe_value(tilt, 1),
-            status,
-        ])
+        rows.append(
+            [
+                view.get("index", UNKNOWN),
+                Path(str(view.get("filename", UNKNOWN))).name,
+                view.get("detected_point_count", UNKNOWN),
+                safe_value(rms, 3),
+                safe_value(distance, 4),
+                safe_value(tilt, 1),
+                status,
+            ]
+        )
 
     fig, ax = plt.subplots(figsize=(11.69, 8.27))
     ax.axis("off")
@@ -927,33 +944,37 @@ def add_quality_page(pdf, checks, metadata, distances):
         else:
             deployment_status = "PASS"
 
-        rows.append([
-            "Expected working distance coverage",
-            (
-                f"Expected: {estimated_working_distance}; "
-                f"calibrated range: {nearest:.4f} to {farthest:.4f}"
-            ),
-            deployment_status,
-        ])
+        rows.append(
+            [
+                "Expected working distance coverage",
+                (
+                    f"Expected: {estimated_working_distance}; "
+                    f"calibrated range: {nearest:.4f} to {farthest:.4f}"
+                ),
+                deployment_status,
+            ]
+        )
     else:
-        rows.append([
-            "Expected working distance coverage",
-            UNKNOWN,
-            "Unknown",
-        ])
+        rows.append(
+            [
+                "Expected working distance coverage",
+                UNKNOWN,
+                "Unknown",
+            ]
+        )
 
     has_fail = any(row[2] == "FAIL" for row in rows)
     has_warning = any(row[2] == "WARNING" for row in rows)
 
     overall_status = (
-        "FAIL"
-        if has_fail
-        else ("PASS WITH WARNINGS" if has_warning else "PASS")
+        "FAIL" if has_fail else ("PASS WITH WARNINGS" if has_warning else "PASS")
     )
 
     fig, ax = plt.subplots(figsize=(11.69, 8.27))
     ax.axis("off")
-    ax.set_title(f"Calibration Quality Assessment: {overall_status}", fontsize=16, pad=20)
+    ax.set_title(
+        f"Calibration Quality Assessment: {overall_status}", fontsize=16, pad=20
+    )
 
     table = ax.table(
         cellText=rows,
@@ -997,6 +1018,7 @@ def add_quality_page(pdf, checks, metadata, distances):
 # MAIN
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate a monocular camera calibration PDF report."
@@ -1031,15 +1053,9 @@ def main():
             "Estimated deployment working distance "
             "(must use the same units as board square size)"
         ),
-        "pixel_pitch_um": prompt_optional_float(
-            "Square pixel pitch in micrometers"
-        ),
-        "sensor_width_mm": prompt_optional_float(
-            "Sensor width in mm"
-        ),
-        "sensor_height_mm": prompt_optional_float(
-            "Sensor height in mm"
-        ),
+        "pixel_pitch_um": prompt_optional_float("Square pixel pitch in micrometers"),
+        "sensor_width_mm": prompt_optional_float("Sensor width in mm"),
+        "sensor_height_mm": prompt_optional_float("Sensor height in mm"),
     }
 
     coordinate_image = (

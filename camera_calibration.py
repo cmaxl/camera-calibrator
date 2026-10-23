@@ -54,10 +54,10 @@ import yaml
 
 IMAGE_PATTERNS = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tiff", "*.tif")
 
-MIN_VIEWS = 3               # fewest usable images we accept for a calibration
-MIN_CHARUCO_CORNERS = 6     # fewest ChArUco corners for an image to count
-HIGH_ERROR_PX = 1.0         # per-image RMS above this is flagged as "HIGH"
-PREVIEW_DELAY_MS = 300      # how long --show_corners displays each image
+MIN_VIEWS = 3  # fewest usable images we accept for a calibration
+MIN_CHARUCO_CORNERS = 6  # fewest ChArUco corners for an image to count
+HIGH_ERROR_PX = 1.0  # per-image RMS above this is flagged as "HIGH"
+PREVIEW_DELAY_MS = 300  # how long --show_corners displays each image
 
 # Flags that only make sense for the pinhole (non-fisheye) models.
 PINHOLE_ONLY_OPTIONS = ("fix_aspect_ratio", "fix_k3", "zero_tangent_dist")
@@ -65,12 +65,14 @@ PINHOLE_ONLY_OPTIONS = ("fix_aspect_ratio", "fix_k3", "zero_tangent_dist")
 
 # ─────────────────────────────────────────────────────────── data classes ──
 
+
 @dataclass
 class View:
     """One calibration image: matched 3D board points and 2D detections."""
+
     path: str
-    obj_pts: np.ndarray   # (N, 1, 3) float32, board frame, metres
-    img_pts: np.ndarray   # (N, 1, 2) float32, pixels
+    obj_pts: np.ndarray  # (N, 1, 3) float32, board frame, metres
+    img_pts: np.ndarray  # (N, 1, 2) float32, pixels
 
     @property
     def name(self) -> str:
@@ -80,15 +82,18 @@ class View:
 @dataclass
 class Calibration:
     """Result of one calibration run."""
-    rms: float                    # overall RMS reprojection error from OpenCV
-    K: np.ndarray                 # 3x3 camera matrix
-    dist: np.ndarray              # distortion coefficients
-    rvecs: list                   # per-view rotation  (board -> camera)
-    tvecs: list                   # per-view translation (board -> camera)
-    views: list[View]             # views used for this run
-    errors: list[float]           # per-view RMS reprojection error (px)
+
+    rms: float  # overall RMS reprojection error from OpenCV
+    K: np.ndarray  # 3x3 camera matrix
+    dist: np.ndarray  # distortion coefficients
+    rvecs: list  # per-view rotation  (board -> camera)
+    tvecs: list  # per-view translation (board -> camera)
+    views: list[View]  # views used for this run
+    errors: list[float]  # per-view RMS reprojection error (px)
+
 
 # ─────────────────────────────────────────────────────────── report helpers ──
+
 
 def _to_list(value):
     """Convert numpy/OpenCV values into JSON-safe Python values."""
@@ -152,7 +157,9 @@ def make_report_data(cal, args, image_size, overall_rms=None):
             residuals = observed - projected
 
         except Exception as exc:
-            print(f"Warning: could not calculate report residuals for view {index}: {exc}")
+            print(
+                f"Warning: could not calculate report residuals for view {index}: {exc}"
+            )
             observed = None
             projected = None
             residuals = None
@@ -163,20 +170,22 @@ def make_report_data(cal, args, image_size, overall_rms=None):
         if filename is None:
             filename = f"image_{index:04d}"
 
-        views.append({
-            "index": index,
-            "filename": str(filename),
-            "object_points": _to_list(view.obj_pts),
-            "image_points": _to_list(observed),
-            "projected_points": _to_list(projected),
-            "residual_vectors": _to_list(residuals),
-            "rvec": _to_list(rvec),
-            "tvec": _to_list(tvec),
-            "rms_error_px": float(rms_error),
-            "detected_point_count": (
-                int(len(view.img_pts)) if hasattr(view, "img_pts") else None
-            ),
-        })
+        views.append(
+            {
+                "index": index,
+                "filename": str(filename),
+                "object_points": _to_list(view.obj_pts),
+                "image_points": _to_list(observed),
+                "projected_points": _to_list(projected),
+                "residual_vectors": _to_list(residuals),
+                "rvec": _to_list(rvec),
+                "tvec": _to_list(tvec),
+                "rms_error_px": float(rms_error),
+                "detected_point_count": (
+                    int(len(view.img_pts)) if hasattr(view, "img_pts") else None
+                ),
+            }
+        )
 
     board_info = {
         "board_type": getattr(args, "board_type", None),
@@ -237,16 +246,21 @@ def run_pdf_report(args, yaml_output_path, report_data_path):
     command = [
         sys.executable,
         args.report_script,
-        "--report-data", str(report_data_path),
-        "--camera-yaml", str(yaml_output_path),
-        "--output", str(report_output),
+        "--report-data",
+        str(report_data_path),
+        "--camera-yaml",
+        str(yaml_output_path),
+        "--output",
+        str(report_output),
     ]
 
     if coordinate_image.exists():
-        command.extend([
-            "--coordinate-convention-image",
-            str(coordinate_image),
-        ])
+        command.extend(
+            [
+                "--coordinate-convention-image",
+                str(coordinate_image),
+            ]
+        )
     else:
         print(
             "Warning: coordinate_convention.jpg was not found. "
@@ -260,7 +274,9 @@ def run_pdf_report(args, yaml_output_path, report_data_path):
 
     print(f"PDF report written to: {report_output}")
 
+
 # ──────────────────────────────────────────────────────── argument parsing ──
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
@@ -268,66 +284,135 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    p.add_argument("--images_dir", required=True,
-                   help="Folder containing calibration images")
-    p.add_argument("--board_type", choices=["chessboard", "charuco"],
-                   default="chessboard", help="Calibration target type")
-    p.add_argument("--board_cols", type=int, default=9,
-                   help="chessboard: inner corners along X; charuco: squares along X")
-    p.add_argument("--board_rows", type=int, default=6,
-                   help="chessboard: inner corners along Y; charuco: squares along Y")
-    p.add_argument("--square_size", type=float, default=0.025,
-                   help="Square side length in metres (default 0.025)")
-    p.add_argument("--marker_size", type=float, default=None,
-                   help="ChArUco: marker side length in metres "
-                        "(default 0.75 * square_size)")
-    p.add_argument("--aruco_dict", default="DICT_6X6_250",
-                   help="ChArUco: ArUco dictionary name (default DICT_6X6_250)")
-    p.add_argument("--distortion_model",
-                   choices=["plumb_bob", "rational_poly", "equidistant", "none"],
-                   default="plumb_bob", help="Distortion model (default plumb_bob)")
-    p.add_argument("--reproj_threshold", type=float, default=None, metavar="T",
-                   help="Drop images whose RMS reprojection error exceeds T px "
-                        "and recalibrate once (off by default)")
-    p.add_argument("--output", default="camera_info.yaml",
-                   help="Output YAML path (default camera_info.yaml)")
-    p.add_argument("--camera_name", default="camera",
-                   help="camera_name field in the YAML (default 'camera')")
-    p.add_argument("--legacy_pattern", action=argparse.BooleanOptionalAction,
-                   default=True,
-                   help="ChArUco: board uses the legacy (pre-OpenCV 4.6) marker "
-                        "layout. On by default; use --no-legacy_pattern for "
-                        "boards generated with the current layout")
-    p.add_argument("--save_extrinsics", action="store_true",
-                   help="Also store the per-image board poses in the YAML")
+    p.add_argument(
+        "--images_dir", required=True, help="Folder containing calibration images"
+    )
+    p.add_argument(
+        "--board_type",
+        choices=["chessboard", "charuco"],
+        default="chessboard",
+        help="Calibration target type",
+    )
+    p.add_argument(
+        "--board_cols",
+        type=int,
+        default=9,
+        help="chessboard: inner corners along X; charuco: squares along X",
+    )
+    p.add_argument(
+        "--board_rows",
+        type=int,
+        default=6,
+        help="chessboard: inner corners along Y; charuco: squares along Y",
+    )
+    p.add_argument(
+        "--square_size",
+        type=float,
+        default=0.025,
+        help="Square side length in metres (default 0.025)",
+    )
+    p.add_argument(
+        "--marker_size",
+        type=float,
+        default=None,
+        help="ChArUco: marker side length in metres (default 0.75 * square_size)",
+    )
+    p.add_argument(
+        "--aruco_dict",
+        default="DICT_6X6_250",
+        help="ChArUco: ArUco dictionary name (default DICT_6X6_250)",
+    )
+    p.add_argument(
+        "--distortion_model",
+        choices=["plumb_bob", "rational_poly", "equidistant", "none"],
+        default="plumb_bob",
+        help="Distortion model (default plumb_bob)",
+    )
+    p.add_argument(
+        "--reproj_threshold",
+        type=float,
+        default=None,
+        metavar="T",
+        help="Drop images whose RMS reprojection error exceeds T px "
+        "and recalibrate once (off by default)",
+    )
+    p.add_argument(
+        "--output",
+        default="camera_info.yaml",
+        help="Output YAML path (default camera_info.yaml)",
+    )
+    p.add_argument(
+        "--camera_name",
+        default="camera",
+        help="camera_name field in the YAML (default 'camera')",
+    )
+    p.add_argument(
+        "--legacy_pattern",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="ChArUco: board uses the legacy (pre-OpenCV 4.6) marker "
+        "layout. On by default; use --no-legacy_pattern for "
+        "boards generated with the current layout",
+    )
+    p.add_argument(
+        "--save_extrinsics",
+        action="store_true",
+        help="Also store the per-image board poses in the YAML",
+    )
 
     # Calibration flags
-    p.add_argument("--fix_principal_point", action="store_true",
-                   help="Fix the principal point at the image centre")
-    p.add_argument("--fix_aspect_ratio", action="store_true",
-                   help="Force fx == fy (pinhole models only)")
-    p.add_argument("--fix_k3", action="store_true",
-                   help="Fix k3 = 0 (pinhole models only)")
-    p.add_argument("--zero_tangent_dist", action="store_true",
-                   help="Fix p1 = p2 = 0 (pinhole models only)")
+    p.add_argument(
+        "--fix_principal_point",
+        action="store_true",
+        help="Fix the principal point at the image centre",
+    )
+    p.add_argument(
+        "--fix_aspect_ratio",
+        action="store_true",
+        help="Force fx == fy (pinhole models only)",
+    )
+    p.add_argument(
+        "--fix_k3", action="store_true", help="Fix k3 = 0 (pinhole models only)"
+    )
+    p.add_argument(
+        "--zero_tangent_dist",
+        action="store_true",
+        help="Fix p1 = p2 = 0 (pinhole models only)",
+    )
 
-    p.add_argument("--subpix_winsize", type=int, default=5,
-                   help="Chessboard: half window size for sub-pixel refinement "
-                        "(default 5)")
-    p.add_argument("--show_corners", action="store_true",
-                   help="Display the detected corners for each image")
-    
+    p.add_argument(
+        "--subpix_winsize",
+        type=int,
+        default=5,
+        help="Chessboard: half window size for sub-pixel refinement (default 5)",
+    )
+    p.add_argument(
+        "--show_corners",
+        action="store_true",
+        help="Display the detected corners for each image",
+    )
+
     # Report flags
-    p.add_argument("--create_report", action="store_true",
-                    help="Generate a PDF camera calibration report after calibration")
-    p.add_argument("--report_output", default=None,
-                    help="Optional output PDF path. Default: <output_yaml_stem>_report.pdf")
-    p.add_argument("--report_script", default="calibration_report.py",
-                    help="Path to the PDF report generator script")
+    p.add_argument(
+        "--create_report",
+        action="store_true",
+        help="Generate a PDF camera calibration report after calibration",
+    )
+    p.add_argument(
+        "--report_output",
+        default=None,
+        help="Optional output PDF path. Default: <output_yaml_stem>_report.pdf",
+    )
+    p.add_argument(
+        "--report_script",
+        default="calibration_report.py",
+        help="Path to the PDF report generator script",
+    )
     return p.parse_args()
 
 
 # ───────────────────────────────────────────────────────── image handling ──
+
 
 def find_images(images_dir: str) -> list[str]:
     """Return a sorted list of image paths in `images_dir`."""
@@ -354,8 +439,10 @@ def iter_gray_images(paths: list[str]) -> Iterator[tuple[str, np.ndarray]]:
         if expected_shape is None:
             expected_shape = gray.shape
         elif gray.shape != expected_shape:
-            print(f"  [SKIP] Different resolution "
-                  f"({gray.shape[1]}x{gray.shape[0]}): {os.path.basename(path)}")
+            print(
+                f"  [SKIP] Different resolution "
+                f"({gray.shape[1]}x{gray.shape[0]}): {os.path.basename(path)}"
+            )
             continue
         yield path, gray
 
@@ -369,6 +456,7 @@ def show_preview(window: str, gray: np.ndarray, draw) -> None:
 
 
 # ─────────────────────────────────────────────────────────── detection ──
+
 
 def detect_chessboard(paths, rows, cols, square_size, subpix_ws, show):
     """Find chessboard corners in every image.
@@ -395,35 +483,45 @@ def detect_chessboard(paths, rows, cols, square_size, subpix_ws, show):
             print(f"  [SKIP] No corners found: {os.path.basename(path)}")
             continue
 
-        corners = cv2.cornerSubPix(gray, corners, subpix_window, (-1, -1),
-                                   subpix_criteria)
+        corners = cv2.cornerSubPix(
+            gray, corners, subpix_window, (-1, -1), subpix_criteria
+        )
         views.append(View(path, board_pts.copy(), corners.astype(np.float32)))
 
         if show:
-            show_preview("Chessboard", gray,
-                         lambda img: cv2.drawChessboardCorners(
-                             img, pattern_size, 
-                             np.asarray(corners, dtype=np.float32).reshape(-1, 1, 2).copy(), 
-                             np.asarray(found, dtype=np.int32).reshape(-1, 1).copy()
-                        ))
+            show_preview(
+                "Chessboard",
+                gray,
+                lambda img: cv2.drawChessboardCorners(
+                    img,
+                    pattern_size,
+                    np.asarray(corners, dtype=np.float32).reshape(-1, 1, 2).copy(),
+                    np.asarray(found, dtype=np.int32).reshape(-1, 1).copy(),
+                ),
+            )
 
     if show:
         cv2.destroyAllWindows()
     return views, image_size
 
 
-def detect_charuco(paths, rows, cols, square_size, marker_size, dict_name,
-                   legacy_pattern, show):
+def detect_charuco(
+    paths, rows, cols, square_size, marker_size, dict_name, legacy_pattern, show
+):
     """Find ChArUco corners in every image (OpenCV >= 4.7 API).
 
     Partial views are fine: each image may contribute a different number of
     corners. Returns (views, image_size) where image_size is (width, height).
     """
     if not hasattr(cv2.aruco, "CharucoDetector"):
-        sys.exit("[ERROR] ChArUco support needs OpenCV >= 4.7 "
-                 f"(found {cv2.__version__}). Try: pip install -U opencv-contrib-python")
+        sys.exit(
+            "[ERROR] ChArUco support needs OpenCV >= 4.7 "
+            f"(found {cv2.__version__}). Try: pip install -U opencv-contrib-python"
+        )
 
-    dict_id = getattr(cv2.aruco, dict_name, None) if dict_name.startswith("DICT_") else None
+    dict_id = (
+        getattr(cv2.aruco, dict_name, None) if dict_name.startswith("DICT_") else None
+    )
     if dict_id is None:
         sys.exit(f"[ERROR] Unknown ArUco dictionary: {dict_name}")
     if marker_size >= square_size:
@@ -439,7 +537,8 @@ def detect_charuco(paths, rows, cols, square_size, marker_size, dict_name,
     detector_params = cv2.aruco.DetectorParameters()
     detector_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     detector = cv2.aruco.CharucoDetector(
-        board, cv2.aruco.CharucoParameters(), detector_params)
+        board, cv2.aruco.CharucoParameters(), detector_params
+    )
 
     views, image_size = [], None
     for path, gray in iter_gray_images(paths):
@@ -449,8 +548,10 @@ def detect_charuco(paths, rows, cols, square_size, marker_size, dict_name,
         ch_corners, ch_ids, _, _ = detector.detectBoard(gray)
         if ch_ids is None or len(ch_ids) < MIN_CHARUCO_CORNERS:
             found = 0 if ch_ids is None else len(ch_ids)
-            print(f"  [SKIP] Only {found} ChArUco corners "
-                  f"(need {MIN_CHARUCO_CORNERS}): {os.path.basename(path)}")
+            print(
+                f"  [SKIP] Only {found} ChArUco corners "
+                f"(need {MIN_CHARUCO_CORNERS}): {os.path.basename(path)}"
+            )
             continue
 
         # Look up the 3D board position of every corner that was detected.
@@ -459,17 +560,24 @@ def detect_charuco(paths, rows, cols, square_size, marker_size, dict_name,
             print(f"  [SKIP] Point matching failed: {os.path.basename(path)}")
             continue
 
-        views.append(View(path,
-                          obj_pts.reshape(-1, 1, 3).astype(np.float32),
-                          img_pts.reshape(-1, 1, 2).astype(np.float32)))
+        views.append(
+            View(
+                path,
+                obj_pts.reshape(-1, 1, 3).astype(np.float32),
+                img_pts.reshape(-1, 1, 2).astype(np.float32),
+            )
+        )
 
         if show:
-            show_preview("ChArUco", gray,
-                         lambda img: cv2.aruco.drawDetectedCornersCharuco(
-                            img,
-                            np.asarray(ch_corners, dtype=np.float32).reshape(-1, 1, 2).copy(),
-                            np.asarray(ch_ids, dtype=np.int32).reshape(-1, 1).copy(),
-                        ))
+            show_preview(
+                "ChArUco",
+                gray,
+                lambda img: cv2.aruco.drawDetectedCornersCharuco(
+                    img,
+                    np.asarray(ch_corners, dtype=np.float32).reshape(-1, 1, 2).copy(),
+                    np.asarray(ch_ids, dtype=np.int32).reshape(-1, 1).copy(),
+                ),
+            )
 
     if show:
         cv2.destroyAllWindows()
@@ -477,6 +585,7 @@ def detect_charuco(paths, rows, cols, square_size, marker_size, dict_name,
 
 
 # ───────────────────────────────────────────────────────── calibration ──
+
 
 def build_pinhole_flags(args, model: str) -> int:
     """Translate CLI options into cv2.calibrateCamera flags."""
@@ -493,9 +602,15 @@ def build_pinhole_flags(args, model: str) -> int:
         flags |= cv2.CALIB_RATIONAL_MODEL
     if model == "none":
         # Pin every distortion coefficient to its initial value of zero.
-        flags |= (cv2.CALIB_FIX_K1 | cv2.CALIB_FIX_K2 | cv2.CALIB_FIX_K3 |
-                  cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_K6 |
-                  cv2.CALIB_ZERO_TANGENT_DIST)
+        flags |= (
+            cv2.CALIB_FIX_K1
+            | cv2.CALIB_FIX_K2
+            | cv2.CALIB_FIX_K3
+            | cv2.CALIB_FIX_K4
+            | cv2.CALIB_FIX_K5
+            | cv2.CALIB_FIX_K6
+            | cv2.CALIB_ZERO_TANGENT_DIST
+        )
     return flags
 
 
@@ -506,8 +621,13 @@ def run_pinhole(views, image_size, model, args):
     camera_matrix = np.eye(3) if args.fix_aspect_ratio else None
 
     return cv2.calibrateCamera(
-        [v.obj_pts for v in views], [v.img_pts for v in views],
-        image_size, camera_matrix, None, flags=build_pinhole_flags(args, model))
+        [v.obj_pts for v in views],
+        [v.img_pts for v in views],
+        image_size,
+        camera_matrix,
+        None,
+        flags=build_pinhole_flags(args, model),
+    )
 
 
 def fisheye_flag(name: str) -> int:
@@ -529,7 +649,8 @@ def run_fisheye(views, image_size, args):
     obj = [v.obj_pts.reshape(1, -1, 3).astype(np.float64) for v in views]
     img = [v.img_pts.reshape(1, -1, 2).astype(np.float64) for v in views]
     return cv2.fisheye.calibrate(
-        obj, img, image_size, np.zeros((3, 3)), np.zeros((4, 1)), flags=flags)
+        obj, img, image_size, np.zeros((3, 3)), np.zeros((4, 1)), flags=flags
+    )
 
 
 def per_view_errors(views, rvecs, tvecs, K, dist, model) -> list[float]:
@@ -539,7 +660,7 @@ def per_view_errors(views, rvecs, tvecs, K, dist, model) -> list[float]:
     for view, rvec, tvec in zip(views, rvecs, tvecs):
         projected, _ = project(view.obj_pts, rvec, tvec, K, dist)
         diff = projected.reshape(-1, 2) - view.img_pts.reshape(-1, 2)
-        errors.append(float(np.sqrt(np.mean(diff ** 2))))
+        errors.append(float(np.sqrt(np.mean(diff**2))))
     return errors
 
 
@@ -556,17 +677,22 @@ def calibrate(views, image_size, model, args) -> Calibration:
 
 # ─────────────────────────────────────────────────────────── YAML output ──
 
+
 def ros_distortion_model(model: str) -> str:
     """Map our model name to the string ROS expects in camera_info."""
-    return {"rational_poly": "rational_polynomial",
-            "equidistant": "equidistant"}.get(model, "plumb_bob")
+    return {"rational_poly": "rational_polynomial", "equidistant": "equidistant"}.get(
+        model, "plumb_bob"
+    )
 
 
 def matrix_entry(matrix: np.ndarray) -> dict:
     """ROS-style {rows, cols, data} dictionary."""
     matrix = np.atleast_2d(matrix)
-    return {"rows": matrix.shape[0], "cols": matrix.shape[1],
-            "data": matrix.flatten().tolist()}
+    return {
+        "rows": matrix.shape[0],
+        "cols": matrix.shape[1],
+        "data": matrix.flatten().tolist(),
+    }
 
 
 def board_poses(cal: Calibration) -> list[dict]:
@@ -577,14 +703,16 @@ def board_poses(cal: Calibration) -> list[dict]:
         board_to_camera = np.eye(4)
         board_to_camera[:3, :3] = rotation
         board_to_camera[:3, 3] = np.asarray(tvec).flatten()
-        poses.append({
-            "image": view.name,
-            "index": i,
-            "rvec": np.asarray(rvec).flatten().tolist(),
-            "tvec": np.asarray(tvec).flatten().tolist(),
-            "reprojection_error_px": cal.errors[i],
-            "camera_pose_in_board_4x4": np.linalg.inv(board_to_camera).tolist(),
-        })
+        poses.append(
+            {
+                "image": view.name,
+                "index": i,
+                "rvec": np.asarray(rvec).flatten().tolist(),
+                "tvec": np.asarray(tvec).flatten().tolist(),
+                "reprojection_error_px": cal.errors[i],
+                "camera_pose_in_board_4x4": np.linalg.inv(board_to_camera).tolist(),
+            }
+        )
     return poses
 
 
@@ -612,6 +740,7 @@ def make_camera_info(camera_name, image_size, cal, model, save_extrinsics) -> di
 
 
 # ──────────────────────────────────────────────────────────── reporting ──
+
 
 def print_errors(cal: Calibration, threshold) -> None:
     line = f"  {'-' * 56}"
@@ -641,8 +770,11 @@ def print_intrinsics(cal: Calibration) -> None:
 
 
 def print_header(args) -> None:
-    threshold = (f"{args.reproj_threshold:.4f} px"
-                 if args.reproj_threshold is not None else "not set")
+    threshold = (
+        f"{args.reproj_threshold:.4f} px"
+        if args.reproj_threshold is not None
+        else "not set"
+    )
     print(f"\n{'=' * 60}")
     print("  Camera Calibration Tool -> ROS 2 camera_info")
     print(f"{'=' * 60}")
@@ -659,7 +791,10 @@ def print_header(args) -> None:
 
 # ─────────────────────────────────────────────────────────────── main ──
 
-def remove_outliers(cal: Calibration, threshold, image_size, model, args) -> Calibration:
+
+def remove_outliers(
+    cal: Calibration, threshold, image_size, model, args
+) -> Calibration:
     """Drop views above `threshold` and recalibrate once.
 
     Returns the original calibration if nothing was rejected or too few views
@@ -677,8 +812,10 @@ def remove_outliers(cal: Calibration, threshold, image_size, model, args) -> Cal
         print(f"    {view.name:40s}  {err:.4f} px")
 
     if len(kept) < MIN_VIEWS:
-        print(f"  [WARN] Fewer than {MIN_VIEWS} images would remain. "
-              "Skipping recalibration, keeping initial results.")
+        print(
+            f"  [WARN] Fewer than {MIN_VIEWS} images would remain. "
+            "Skipping recalibration, keeping initial results."
+        )
         return cal
 
     print(f"  Recalibrating with {len(kept)} image(s)...")
@@ -700,8 +837,10 @@ def main() -> None:
     if model == "equidistant":
         ignored = [o for o in PINHOLE_ONLY_OPTIONS if getattr(args, o)]
         if ignored:
-            print(f"[WARN] Ignored for the equidistant model: "
-                  f"{', '.join('--' + o for o in ignored)}")
+            print(
+                f"[WARN] Ignored for the equidistant model: "
+                f"{', '.join('--' + o for o in ignored)}"
+            )
 
     print_header(args)
     paths = find_images(args.images_dir)
@@ -710,17 +849,30 @@ def main() -> None:
     # 1. Detect the board in every image.
     if args.board_type == "chessboard":
         views, image_size = detect_chessboard(
-            paths, args.board_rows, args.board_cols, args.square_size,
-            args.subpix_winsize, args.show_corners)
+            paths,
+            args.board_rows,
+            args.board_cols,
+            args.square_size,
+            args.subpix_winsize,
+            args.show_corners,
+        )
     else:
         views, image_size = detect_charuco(
-            paths, args.board_rows, args.board_cols, args.square_size,
-            args.marker_size, args.aruco_dict, args.legacy_pattern,
-            args.show_corners)
+            paths,
+            args.board_rows,
+            args.board_cols,
+            args.square_size,
+            args.marker_size,
+            args.aruco_dict,
+            args.legacy_pattern,
+            args.show_corners,
+        )
 
     if len(views) < MIN_VIEWS:
-        sys.exit(f"[ERROR] Need at least {MIN_VIEWS} images with a detected "
-                 f"board, got {len(views)}.")
+        sys.exit(
+            f"[ERROR] Need at least {MIN_VIEWS} images with a detected "
+            f"board, got {len(views)}."
+        )
     print(f"\nUsed {len(views)} / {len(paths)} images for initial calibration.")
 
     # 2. Calibrate.
@@ -734,14 +886,17 @@ def main() -> None:
         cal = remove_outliers(cal, args.reproj_threshold, image_size, model, args)
 
     # 4. Write the YAML.
-    info = make_camera_info(args.camera_name, image_size, cal, model,
-                            args.save_extrinsics)
+    info = make_camera_info(
+        args.camera_name, image_size, cal, model, args.save_extrinsics
+    )
     with open(args.output, "w") as f:
         yaml.dump(info, f, default_flow_style=False, sort_keys=False)
 
     print(f"\ncamera_info YAML written to: {args.output}")
-    print("Point your camera driver's camera_info_url parameter at it, e.g. "
-          f"file://{os.path.abspath(args.output)}")
+    print(
+        "Point your camera driver's camera_info_url parameter at it, e.g. "
+        f"file://{os.path.abspath(args.output)}"
+    )
 
     if args.create_report:
         width, height = image_size
