@@ -220,7 +220,10 @@ def detect_chessboard(paths, rows, cols, square_size, subpix_ws, show):
         if show:
             show_preview("Chessboard", gray,
                          lambda img: cv2.drawChessboardCorners(
-                             img, pattern_size, corners, found))
+                             img, pattern_size, 
+                             np.asarray(corners, dtype=np.float32).reshape(-1, 1, 2).copy(), 
+                             np.asarray(found, dtype=np.int32).reshape(-1, 1).copy()
+                        ))
 
     if show:
         cv2.destroyAllWindows()
