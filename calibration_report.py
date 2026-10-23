@@ -545,7 +545,7 @@ def add_error_pages(pdf, data):
         # Number of bins across the sensor. Keep bin aspect approximately
         # consistent with the image aspect ratio.
         grid_cols = 48
-        grid_rows = max(1, int(round(grid_cols * height / width)))
+        grid_rows = max(1, round(grid_cols * height / width))
 
         # Controls only visual display of residual arrows.
         #
